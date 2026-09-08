@@ -16,9 +16,10 @@ class Settings(BaseSettings):
     database_url: str
 
     # --- OpenAI (LLM + Embeddings) ---
-    openai_api_key: str
-    openai_embedding_model: str = "text-embedding-3-small"
-    openai_embedding_dimensions: int = 1536
+    # --- Hugging Face (Embeddings) ---
+    huggingface_api_key: str 
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_dimensions: int = 384
 
     # --- Server ---
     allowed_origins: str = "http://localhost:5173"

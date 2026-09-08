@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, pool
 from alembic import context
 
 # 1. Import our app settings and models
-from app.config import settings
-from app.models import Base
+from app.database.config import settings
+from app.database.models import Base
 
 # Alembic Config object (reads alembic.ini for logging & paths)
 config = context.config
