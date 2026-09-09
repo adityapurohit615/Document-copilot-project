@@ -139,3 +139,71 @@ async def chat_stream(
         ),
         media_type="text/plain",
     )
+
+# ==========================================
+# Thread Management Endpoints
+# ==========================================
+
+@router.get("/threads")
+async def list_user_threads(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> list[dict]:
+    """Returns all chat threads belonging to the authenticated analyst."""
+    with Session(engine) as session:
+        stmt = (
+            select(ChatThread)
+            .where(ChatThread.user_id == current_user.id)
+            .order_by(ChatThread.updated_at.desc())
+        )
+        threads = session.scalars(stmt).all()
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "created_at": t.created_at.isoformat(),
+                "updated_at": t.updated_at.isoformat(),
+            }
+            for t in threads
+        ]
+
+
+@router.get("/threads/{thread_id}/messages")
+async def get_thread_messages(
+    thread_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> list[dict]:
+    """Loads all message turns and citations for a specific thread."""
+    with Session(engine) as session:
+        # Verify ownership
+        thread = session.get(ChatThread, thread_id)
+        if not thread or thread.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Thread not found",
+            )
+
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.thread_id == thread_id)
+            .order_by(ChatMessage.created_at.asc())
+        )
+        messages = session.scalars(stmt).all()
+
+        results = []
+        for m in messages:
+            msg_dict = {
+                "id": str(m.id),
+                "role": m.role,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+                "citations": [
+                    {
+                        "chunk_id": str(c.chunk_id),
+                        "snippet": c.snippet,
+                    }
+                    for c in m.citations
+                ],
+            }
+            results.append(msg_dict)
+
+        return results

@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 import httpx
+import time
 
 from openai import OpenAI
 from sqlalchemy import create_engine, select
@@ -57,20 +58,20 @@ def get_embeddings_batch(texts: list[str], batch_size: int = 20) -> list[list[fl
                 )
             batch_embeddings = response.json()
             all_embeddings.extend(batch_embeddings)
+            time.sleep(0.3)  
     return all_embeddings
 
-
-def ingest_filing(filing_meta: dict, session: Session) -> bool:
-    """Ingests a single filing into Supabase. Returns True if ingested, False if skipped."""
+def ingest_filing(filing_meta: dict) -> bool:
+    """Ingests a single filing into Supabase with fresh, isolated DB sessions."""
     accession_number = filing_meta["accession_number"]
     ticker = filing_meta["ticker"]
 
-    # 1. Idempotency check: Skip if already exists
-    stmt = select(SourceDocument).where(SourceDocument.accession_number == accession_number)
-    existing_doc = session.scalars(stmt).first()
-    if existing_doc:
-        print(f"⏩ [Skip] {ticker} {accession_number} is already in database.")
-        return False
+    # 1. Quick check: Open session, check, and immediately close
+    with Session(engine) as session:
+        stmt = select(SourceDocument).where(SourceDocument.accession_number == accession_number)
+        if session.scalars(stmt).first():
+            print(f"⏩ [Skip] {ticker} {accession_number} is already in database.")
+            return False
 
     # 2. Read raw HTML
     html_file = DOWNLOADS_DIR / filing_meta["local_path"]
@@ -81,7 +82,7 @@ def ingest_filing(filing_meta: dict, session: Session) -> bool:
     print(f"\n📄 Ingesting {ticker} ({filing_meta['filing_date']})...")
     raw_html = html_file.read_text(encoding="utf-8", errors="ignore")
 
-    # 3. Clean and parse HTML to text
+    # 3. Clean and parse HTML to text (No DB connection open here!)
     clean_text = parse_sec_html(raw_html)
     print(f"   ✓ Parsed text ({len(clean_text):,} characters)")
 
@@ -89,12 +90,12 @@ def ingest_filing(filing_meta: dict, session: Session) -> bool:
     chunks = chunk_text(clean_text)
     print(f"   ✓ Generated {len(chunks)} chunks")
 
-    # 5. Generate embeddings in batches
+    # 5. Generate embeddings in batches (Slow API calls happen safely outside DB session)
     print(f"   ✓ Computing embeddings with {settings.embedding_model}...")
     chunk_texts = [c.text for c in chunks]
     embeddings = get_embeddings_batch(chunk_texts)
 
-    # 6. Insert parent document record
+    # 6. Open a fresh DB session just for the 0.1-second write transaction
     doc_id = uuid.uuid4()
     filing_date = datetime.strptime(filing_meta["filing_date"], "%Y-%m-%d").date()
 
@@ -108,38 +109,33 @@ def ingest_filing(filing_meta: dict, session: Session) -> bool:
         source_url=filing_meta["source_url"],
         content=clean_text,
     )
-    session.add(source_doc)
 
-    # 7. Insert chunk records
-    for c, emb in zip(chunks, embeddings):
-        chunk_record = DocumentChunk(
-            id=uuid.uuid4(),
-            document_id=doc_id,
-            chunk_index=c.chunk_index,
-            chunk_text=c.text,
-            token_count=c.token_count,
-            embedding=emb,
-            metadata_={
-                "ticker": ticker,
-                "year": filing_date.year,
-                "filing_date": filing_meta["filing_date"],
-                "accession_number": accession_number,
-            },
-        )
-        session.add(chunk_record)
+    with Session(engine) as session:
+        session.add(source_doc)
+        for c, emb in zip(chunks, embeddings):
+            chunk_record = DocumentChunk(
+                id=uuid.uuid4(),
+                document_id=doc_id,
+                chunk_index=c.chunk_index,
+                chunk_text=c.text,
+                token_count=c.token_count,
+                embedding=emb,
+                metadata_={
+                    "ticker": ticker,
+                    "year": filing_date.year,
+                    "filing_date": filing_meta["filing_date"],
+                    "accession_number": accession_number,
+                },
+            )
+            session.add(chunk_record)
 
-    session.commit()
+        session.commit()
+
     print(f"   ✅ Successfully committed {ticker} and {len(chunks)} chunks to Supabase!")
     return True
 
 
 def run_pipeline(limit: int | None = 1) -> None:
-    """Runs the ingestion pipeline.
-
-    Args:
-        limit: Max number of filings to ingest. Default is 1 for testing.
-               Pass None to ingest all filings.
-    """
     if not MANIFEST_PATH.exists():
         print(f"Manifest not found at {MANIFEST_PATH}")
         return
@@ -152,9 +148,8 @@ def run_pipeline(limit: int | None = 1) -> None:
         print(f"Running in test mode: ingesting {limit} filing(s).")
         filings = filings[:limit]
 
-    with Session(engine) as session:
-        for filing in filings:
-            ingest_filing(filing, session)
+    for filing in filings:
+        ingest_filing(filing)  # <--- Fresh connection per filing!
 
 
 if __name__ == "__main__":

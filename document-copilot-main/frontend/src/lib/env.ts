@@ -1,0 +1,9 @@
+export const env = {
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL as string,
+  SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+}
+
+if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+  console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in frontend/.env')
+}
