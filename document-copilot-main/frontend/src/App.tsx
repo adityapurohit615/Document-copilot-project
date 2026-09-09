@@ -4,9 +4,12 @@ import {
   streamChatResponse,
   fetchUserThreads,
   fetchThreadMessages,
+  extractCitations,
   type ChatMessage,
+  type CitationItem,
   type ThreadSummary,
 } from './lib/api'
+import { CitationDrawer } from './components/CitationDrawer'
 import type { User } from '@supabase/supabase-js'
 
 export default function App() {
@@ -21,10 +24,11 @@ export default function App() {
 
   // Chat & Thread state
   const [threads, setThreads] = useState<ThreadSummary[]>([])
-  const [currentThreadId, setCurrentThreadId] = useState(() => crypto.randomUUID())
+  const [currentThreadId, setCurrentThreadId] = useState<string>(() => crypto.randomUUID())
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [activeCitation, setActiveCitation] = useState<CitationItem | null>(null)
 
   // 1. Auth listener
   useEffect(() => {
@@ -55,6 +59,7 @@ export default function App() {
   // Handle switching to an existing thread
   const handleSelectThread = async (threadId: string) => {
     if (isStreaming) return
+    setActiveCitation(null)
     setCurrentThreadId(threadId)
     const history = await fetchThreadMessages(threadId)
     setMessages(history)
@@ -63,6 +68,7 @@ export default function App() {
   // Handle creating a new thread
   const handleNewChat = () => {
     if (isStreaming) return
+    setActiveCitation(null)
     setCurrentThreadId(crypto.randomUUID())
     setMessages([])
     setInput('')
@@ -287,22 +293,75 @@ export default function App() {
             </div>
           ) : (
             <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-sm ${
-                      msg.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-slate-200 bg-white text-slate-800 whitespace-pre-wrap'
-                    }`}
-                  >
-                    {msg.content || (isStreaming ? 'Researching SEC filings...' : '')}
+              {messages.map((msg) => {
+                if (msg.role === 'user') {
+                  return (
+                    <div key={msg.id} className="flex gap-3 justify-end">
+                      <div className="max-w-[85%] rounded-2xl bg-blue-600 p-4 text-sm leading-relaxed text-white shadow-sm">
+                        {msg.content}
+                      </div>
+                    </div>
+                  )
+                }
+
+                // Assistant message handling
+                const { cleanText, citations: parsedCitations } = extractCitations(msg.content)
+                const citations =
+                  msg.citations && msg.citations.length > 0 ? msg.citations : parsedCitations
+                const displayText =
+                  cleanText || (isStreaming ? 'Researching SEC filings...' : '')
+
+                return (
+                  <div key={msg.id} className="flex gap-3 justify-start">
+                    <div className="max-w-[85%] rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-800 shadow-sm">
+                      <div className="whitespace-pre-wrap">{displayText}</div>
+
+                      {/* Interactive Citation Badges */}
+                      {citations && citations.length > 0 && (
+                        <div className="mt-4 border-t border-slate-100 pt-3">
+                          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                            <svg
+                              className="w-3.5 h-3.5 text-blue-500"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            <span>Verified Grounding Citations</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {citations.map((c, idx) => (
+                              <button
+                                key={c.chunk_id + '-' + idx}
+                                type="button"
+                                onClick={() => setActiveCitation(c)}
+                                className="group inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition hover:border-blue-400 hover:bg-blue-50/70 hover:text-blue-700 text-left"
+                                title={`Inspect 10-K passage for ${c.ticker}`}
+                              >
+                                <span className="font-bold text-blue-600">
+                                  [{idx + 1}] {c.ticker}
+                                </span>
+                                <span className="max-w-[200px] truncate text-[11px] text-slate-500 italic group-hover:text-blue-600">
+                                  "{c.snippet}"
+                                </span>
+                                <span className="text-[10px] text-blue-400 opacity-60 group-hover:opacity-100 transition-opacity">
+                                  ↗
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -334,6 +393,12 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {/* Slide-over Citation Drawer */}
+      <CitationDrawer
+        citation={activeCitation}
+        onClose={() => setActiveCitation(null)}
+      />
     </div>
   )
 }

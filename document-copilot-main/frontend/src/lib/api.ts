@@ -1,10 +1,46 @@
 import { env } from './env'
 import { getAccessToken } from './supabase'
 
+export interface CitationItem {
+  chunk_id: string
+  ticker: string
+  snippet: string
+  company_name?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  created_at?: string
+  citations?: CitationItem[]
+}
+
+export interface ChunkDetail {
+  chunk_id: string
+  chunk_index: number
+  chunk_text: string
+  token_count: number
+  ticker: string
+  company_name: string
+  filing_type: string
+  filing_date: string
+  source_url: string
+  accession_number: string
+}
+
+export function extractCitations(text: string): { cleanText: string; citations: CitationItem[] } {
+  const match = text.match(/<!--CITATIONS:(.*?)-->/)
+  if (!match) {
+    return { cleanText: text, citations: [] }
+  }
+  try {
+    const citations: CitationItem[] = JSON.parse(match[1])
+    const cleanText = text.replace(/<!--CITATIONS:.*?-->/, '').trim()
+    return { cleanText, citations }
+  } catch {
+    return { cleanText: text, citations: [] }
+  }
 }
 
 export async function streamChatResponse(
@@ -79,5 +115,17 @@ export async function fetchThreadMessages(threadId: string): Promise<ChatMessage
   })
 
   if (!response.ok) return []
+  return response.json()
+}
+
+export async function fetchChunkDetail(chunkId: string): Promise<ChunkDetail | null> {
+  const token = await getAccessToken()
+  if (!token) return null
+
+  const response = await fetch(`${env.API_BASE_URL}/chat/chunks/${chunkId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) return null
   return response.json()
 }
