@@ -450,8 +450,8 @@ export default function App() {
                   What would you like to research?
                 </h2>
                 <p className="mt-2 text-sm text-slate-400 max-w-lg">
-                  Audited financial synthesis powered by Hybrid Search (HNSW + Postgres FTS) and
-                  Llama 3.3 70B.
+                  Audited financial synthesis powered by Hybrid Search (HNSW + pgvector) and
+                  high-speed LLM inference.
                 </p>
 
                 <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
@@ -512,7 +512,7 @@ export default function App() {
                   const displayText =
                     cleanText ||
                     (isStreaming
-                      ? 'Synthesizing SEC 10-K filings with Llama 3.3 70B...'
+                      ? 'Synthesizing SEC 10-K filings with Groq inference...'
                       : '⚠️ No response received from server. Please check backend logs.')
                   const isError = displayText.startsWith('⚠️')
 

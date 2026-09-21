@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # --- LLM Providers ---
     groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
 

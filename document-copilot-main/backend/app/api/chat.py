@@ -54,8 +54,29 @@ async def chat_stream_generator(
     try:
         deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id)
 
-        # 1. Run the agent
-        result = await document_agent.run(user_query, deps=deps)
+        # 1. Run the agent (with fallback if configured model is not available)
+        try:
+            result = await document_agent.run(user_query, deps=deps)
+        except Exception as run_err:
+            err_str = str(run_err).lower()
+            if "model_not_found" in err_str or "does not exist" in err_str or "access to it" in err_str:
+                from app.assistant.agent import get_groq_provider
+                from pydantic_ai.models.openai import OpenAIChatModel
+                groq_provider = get_groq_provider()
+                if groq_provider:
+                    print(f"⚠️ Primary model error ({run_err}), falling back to openai/gpt-oss-120b...", flush=True)
+                    try:
+                        m1 = OpenAIChatModel("openai/gpt-oss-120b", provider=groq_provider)
+                        result = await document_agent.run(user_query, deps=deps, model=m1)
+                    except Exception as fb_err:
+                        print(f"⚠️ Fallback to 120b failed ({fb_err}), falling back to openai/gpt-oss-20b...", flush=True)
+                        m2 = OpenAIChatModel("openai/gpt-oss-20b", provider=groq_provider)
+                        result = await document_agent.run(user_query, deps=deps, model=m2)
+                else:
+                    raise run_err
+            else:
+                raise run_err
+
         grounded_answer = result.output
 
         # 2. Validate citations

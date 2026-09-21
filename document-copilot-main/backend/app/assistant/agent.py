@@ -8,15 +8,21 @@ from app.assistant.outputs import GroundedAnswer
 from app.database.config import settings
 from app.retrieval.retriever import search_filings
 
-# 1. Configure the LLM Provider (Groq Llama 3.3 70B, Gemini, OpenAI, or Hugging Face)
-def get_llm_model() -> OpenAIChatModel:
+# 1. Configure the LLM Provider (Groq, Gemini, OpenAI, or Hugging Face)
+def get_groq_provider() -> OpenAIProvider | None:
     if settings.groq_api_key and settings.groq_api_key.startswith("gsk_"):
-        print("⚡ Using Groq Llama-3.3-70B-Versatile LLM provider", flush=True)
-        provider = OpenAIProvider(
+        return OpenAIProvider(
             base_url="https://api.groq.com/openai/v1",
             api_key=settings.groq_api_key,
         )
-        return OpenAIChatModel("llama-3.3-70b-versatile", provider=provider)
+    return None
+
+def get_llm_model() -> OpenAIChatModel:
+    groq_provider = get_groq_provider()
+    if groq_provider:
+        model_name = settings.groq_model or "openai/gpt-oss-120b"
+        print(f"⚡ Using Groq {model_name} LLM provider", flush=True)
+        return OpenAIChatModel(model_name, provider=groq_provider)
 
     if settings.gemini_api_key:
         print("⚡ Using Google Gemini LLM provider", flush=True)
