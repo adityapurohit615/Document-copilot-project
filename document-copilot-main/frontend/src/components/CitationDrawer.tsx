@@ -55,25 +55,25 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 overflow-hidden font-sans">
+      {/* Dark Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300"
+        className="fixed inset-0 bg-black/70 backdrop-blur-md transition-opacity duration-300"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Slide-over Panel */}
       <div className="fixed inset-y-0 right-0 flex max-w-full pl-10">
-        <aside className="w-screen max-w-lg transform bg-white shadow-2xl transition-transform duration-300 ease-in-out flex flex-col">
+        <aside className="w-screen max-w-lg transform bg-[#0D121F] border-l border-slate-800 text-slate-100 shadow-2xl transition-transform duration-300 ease-in-out flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <span className="rounded-md bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
+          <div className="flex items-center justify-between border-b border-slate-800/80 bg-[#111827]/70 px-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="rounded-md bg-cyan-950/80 border border-cyan-500/40 px-2.5 py-1 text-xs font-bold text-cyan-300 tracking-wider shadow-[0_0_12px_rgba(6,182,212,0.15)]">
                 {citation.ticker}
               </span>
               <div>
-                <h3 className="text-sm font-semibold text-slate-800">
+                <h3 className="text-sm font-semibold text-white">
                   {detail?.company_name || citation.company_name || 'SEC Filing'}
                 </h3>
                 <p className="text-[11px] text-slate-400">
@@ -84,7 +84,7 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
 
             <button
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200 transition"
               aria-label="Close drawer"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -98,16 +98,17 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
             {/* Cited Snippet Card */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                   Verified Quoted Snippet
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  Grounded Evidence
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                  Audited Grounding
                 </span>
               </div>
-              <div className="rounded-xl border-l-4 border-amber-500 bg-amber-50/50 p-4 shadow-sm">
-                <p className="text-sm italic leading-relaxed text-slate-800">
+              <div className="rounded-xl border-l-4 border-amber-500 bg-amber-950/30 border border-slate-800/80 p-4 shadow-sm">
+                <p className="text-sm italic leading-relaxed text-amber-100">
                   "{citation.snippet}"
                 </p>
               </div>
@@ -120,25 +121,25 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
                   Full Passage Context {detail ? `(Chunk #${detail.chunk_index})` : ''}
                 </span>
                 {detail && (
-                  <span className="text-[10px] text-slate-400">
+                  <span className="rounded bg-slate-800/60 border border-slate-700/60 px-2 py-0.5 text-[10px] font-mono text-cyan-300">
                     {detail.token_count} tokens
                   </span>
                 )}
               </div>
 
               {loading ? (
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200"></div>
-                  <div className="h-4 w-full animate-pulse rounded bg-slate-200"></div>
-                  <div className="h-4 w-5/6 animate-pulse rounded bg-slate-200"></div>
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200"></div>
+                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-slate-800"></div>
+                  <div className="h-4 w-full animate-pulse rounded bg-slate-800"></div>
+                  <div className="h-4 w-5/6 animate-pulse rounded bg-slate-800"></div>
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-800"></div>
                 </div>
               ) : detail ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-700 max-h-72 overflow-y-auto whitespace-pre-wrap select-text">
+                <div className="rounded-xl border border-slate-800 bg-black/60 p-4 font-mono text-xs leading-relaxed text-slate-300 max-h-72 overflow-y-auto whitespace-pre-wrap select-text shadow-inner">
                   {detail.chunk_text}
                 </div>
               ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-xs text-slate-400">
                   Retrieving chunk passage context...
                 </div>
               )}
@@ -146,38 +147,38 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
 
             {/* Filing Details Card */}
             {detail && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+              <div className="rounded-xl border border-slate-800 bg-[#111827]/70 p-4 space-y-3 shadow-sm">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Filing Information
                 </p>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <p className="text-slate-400">Ticker</p>
-                    <p className="font-semibold text-slate-800">{detail.ticker}</p>
+                    <p className="text-slate-500">Ticker</p>
+                    <p className="font-semibold text-white">{detail.ticker}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Filing Type</p>
-                    <p className="font-semibold text-slate-800">Form {detail.filing_type}</p>
+                    <p className="text-slate-500">Filing Type</p>
+                    <p className="font-semibold text-white">Form {detail.filing_type}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Filing Date</p>
-                    <p className="font-semibold text-slate-800">{detail.filing_date}</p>
+                    <p className="text-slate-500">Filing Date</p>
+                    <p className="font-semibold text-white">{detail.filing_date}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Accession</p>
-                    <p className="font-semibold text-slate-800 truncate" title={detail.accession_number}>
+                    <p className="text-slate-500">Accession Number</p>
+                    <p className="font-semibold text-slate-300 truncate" title={detail.accession_number}>
                       {detail.accession_number}
                     </p>
                   </div>
                 </div>
 
                 {detail.source_url && (
-                  <div className="pt-2 border-t border-slate-100">
+                  <div className="pt-3 border-t border-slate-800/80">
                     <a
                       href={detail.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
                     >
                       <span>View Official SEC EDGAR Filing</span>
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,14 +192,14 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-200 bg-slate-50 p-4">
+          <div className="border-t border-slate-800/80 bg-[#0B0F17] p-4">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[11px] text-slate-400 font-mono truncate max-w-[240px]">
+              <span className="text-[11px] text-slate-500 font-mono truncate max-w-[240px]">
                 ID: {citation.chunk_id}
               </span>
               <button
                 onClick={handleCopyChunkId}
-                className="rounded px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 transition"
+                className="rounded-lg border border-slate-700/60 bg-slate-800/80 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition"
               >
                 {copied ? 'Copied!' : 'Copy Chunk ID'}
               </button>
@@ -209,4 +210,3 @@ export function CitationDrawer({ citation, onClose }: CitationDrawerProps) {
     </div>
   )
 }
-

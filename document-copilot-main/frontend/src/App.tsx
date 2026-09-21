@@ -22,6 +22,9 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
 
+  // Navigation tab state (Insights | Sources | History)
+  const [activeTab, setActiveTab] = useState<'insights' | 'sources' | 'history'>('insights')
+
   // Chat & Thread state
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [currentThreadId, setCurrentThreadId] = useState<string>(() => crypto.randomUUID())
@@ -37,7 +40,9 @@ export default function App() {
       setLoadingUser(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
 
@@ -61,6 +66,7 @@ export default function App() {
     if (isStreaming) return
     setActiveCitation(null)
     setCurrentThreadId(threadId)
+    setActiveTab('insights')
     const history = await fetchThreadMessages(threadId)
     setMessages(history)
   }
@@ -72,6 +78,7 @@ export default function App() {
     setCurrentThreadId(crypto.randomUUID())
     setMessages([])
     setInput('')
+    setActiveTab('insights')
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -133,8 +140,13 @@ export default function App() {
 
   if (loadingUser) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-500 font-sans">
-        Loading Document Copilot...
+      <div className="flex h-screen items-center justify-center bg-[#0B0F17] text-slate-400 font-sans">
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent"></div>
+          <span className="text-sm font-medium tracking-wide text-slate-300">
+            Initializing Document Copilot...
+          </span>
+        </div>
       </div>
     )
   }
@@ -142,48 +154,62 @@ export default function App() {
   // --- LOGIN VIEW ---
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="flex min-h-screen items-center justify-center bg-[#0B0F17] p-4 font-sans text-slate-100">
+        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-[#111827]/90 p-8 shadow-2xl backdrop-blur-xl">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Document Copilot</h1>
-            <p className="mt-1 text-sm text-slate-500">Sign in to access your SEC research corpus</p>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-500/40 bg-cyan-950/60 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Document Copilot</h1>
+            <p className="mt-1 text-xs text-slate-400">
+              Audited SEC 10-K Research & Grounded Synthesis
+            </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-300">Email Address</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="analyst@firm.com"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700">Password</label>
+              <label className="block text-xs font-semibold text-slate-300">Password</label>
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
             {authError && (
-              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-600">{authError}</div>
+              <div className="rounded-xl border border-red-900/50 bg-red-950/40 p-3 text-xs text-red-300">
+                {authError}
+              </div>
             )}
 
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+              className="w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 py-2.5 text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] transition hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50"
             >
-              {authLoading ? 'Signing in...' : 'Sign In'}
+              {authLoading ? 'Signing in...' : 'Sign In as Analyst'}
             </button>
           </form>
         </div>
@@ -191,27 +217,44 @@ export default function App() {
     )
   }
 
-  // --- MAIN APP WITH SIDEBAR ---
+  // --- MAIN APP WITH DARK OBSIDIAN THEME ---
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="flex h-screen bg-[#0B0F17] font-sans text-slate-100 overflow-hidden">
       {/* Left Sidebar */}
-      <aside className="flex w-64 flex-col border-r border-slate-200 bg-white">
-        <div className="p-4">
+      <aside className="flex w-64 flex-col border-r border-slate-800/80 bg-[#0D121F]">
+        <div className="p-4 border-b border-slate-800/60">
+          <div className="flex items-center gap-2.5 mb-4 px-1">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/40 bg-cyan-950/70 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white tracking-tight">Document Copilot</h2>
+              <p className="text-[10px] text-cyan-400 font-mono">HNSW • pgvector</p>
+            </div>
+          </div>
+
           <button
             onClick={handleNewChat}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 py-2.5 text-xs font-semibold text-white shadow-[0_0_15px_rgba(6,182,212,0.25)] transition hover:from-cyan-500 hover:to-blue-500"
           >
-            + New Research Chat
+            <span className="text-base leading-none">+</span> New Research Chat
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-2">
-          <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Recent Threads
           </p>
           <div className="mt-2 space-y-1">
             {threads.length === 0 ? (
-              <p className="px-2 text-xs text-slate-400">No previous chats yet.</p>
+              <p className="px-2 text-xs text-slate-500">No previous research chats yet.</p>
             ) : (
               threads.map((t) => (
                 <button
@@ -219,8 +262,8 @@ export default function App() {
                   onClick={() => handleSelectThread(t.id)}
                   className={`w-full truncate rounded-lg px-3 py-2 text-left text-xs transition ${
                     t.id === currentThreadId
-                      ? 'bg-blue-50 font-medium text-blue-700'
-                      : 'text-slate-600 hover:bg-slate-100'
+                      ? 'border border-cyan-500/40 bg-cyan-950/50 font-medium text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                   }`}
                 >
                   {t.title}
@@ -231,15 +274,15 @@ export default function App() {
         </div>
 
         {/* User Footer */}
-        <div className="border-t border-slate-200 p-3">
+        <div className="border-t border-slate-800/80 bg-[#0B0F17]/70 p-3">
           <div className="flex items-center justify-between">
             <div className="truncate text-xs">
-              <p className="truncate font-medium text-slate-800">{user.email}</p>
-              <p className="text-[10px] text-slate-400">Analyst</p>
+              <p className="truncate font-medium text-slate-200">{user.email}</p>
+              <p className="text-[10px] font-semibold text-cyan-400 tracking-wider">FINANCIAL ANALYST</p>
             </div>
             <button
               onClick={handleLogout}
-              className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              className="rounded-lg border border-slate-700/60 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
             >
               Sign out
             </button>
@@ -247,151 +290,281 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Chat Area */}
+      {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-            <span className="text-xs font-semibold text-slate-800">Document Copilot</span>
-            <span className="text-xs text-slate-400">• SEC 10-K Grounded Research</span>
+        {/* Top Navigation Header matching generated design */}
+        <header className="flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#0D121F]/80 px-6 backdrop-blur-md">
+          <div className="flex items-center gap-6">
+            <h1 className="text-sm font-bold tracking-tight text-white">
+              Financial Research Dashboard
+            </h1>
+
+            {/* Navigation Tabs */}
+            <nav className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab('insights')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === 'insights'
+                    ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                Insights
+              </button>
+              <button
+                onClick={() => setActiveTab('sources')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === 'sources'
+                    ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                Sources
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === 'history'
+                    ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                History
+              </button>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-3 py-1 text-[11px] font-medium text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Audited SEC Corpus • Live
+            </div>
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden p-6">
-          {messages.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center text-center">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-800">
-                What would you like to research?
-              </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Grounded answers from official SEC 10-K filings.
-              </p>
+        {/* Tab 1: Sources View */}
+        {activeTab === 'sources' && (
+          <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
+            <h2 className="text-xl font-bold text-white mb-2">Ingested SEC 10-K Knowledge Base</h2>
+            <p className="text-sm text-slate-400 mb-6">
+              Official filings indexed with 600-token sliding windows and 384-dimensional HNSW vector graphs.
+            </p>
 
-              <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSendMessage('What were Apple total net sales and iPhone revenue in 2025?')
-                  }
-                  className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow"
-                >
-                  <p className="text-xs font-semibold text-blue-600">AAPL 10-K</p>
-                  <p className="mt-1 text-sm font-medium text-slate-800">Apple 2025 Net Sales</p>
-                </button>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-800 bg-[#111827]/80 p-5 shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="rounded-md border border-cyan-500/40 bg-cyan-950/80 px-2.5 py-1 text-xs font-bold text-cyan-300">
+                    AAPL
+                  </span>
+                  <span className="text-xs text-slate-400">Form 10-K (FY 2025)</span>
+                </div>
+                <h3 className="text-base font-semibold text-white">Apple Inc.</h3>
+                <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                  Full annual report covering iPhone, Services, Wearables, and detailed financial statements.
+                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>175 vector chunks</span>
+                  <span className="text-emerald-400 font-medium">● Verified Grounded</span>
+                </div>
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSendMessage('How did Microsoft cloud and Azure revenue grow?')
-                  }
-                  className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow"
-                >
-                  <p className="text-xs font-semibold text-blue-600">MSFT 10-K</p>
-                  <p className="mt-1 text-sm font-medium text-slate-800">Microsoft Cloud Growth</p>
-                </button>
+              <div className="rounded-2xl border border-slate-800 bg-[#111827]/80 p-5 shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="rounded-md border border-cyan-500/40 bg-cyan-950/80 px-2.5 py-1 text-xs font-bold text-cyan-300">
+                    MSFT
+                  </span>
+                  <span className="text-xs text-slate-400">Form 10-K (2021-2023)</span>
+                </div>
+                <h3 className="text-base font-semibold text-white">Microsoft Corporation</h3>
+                <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                  Multi-year longitudinal filings covering Intelligent Cloud, Azure growth, and AI CapEx.
+                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>522 vector chunks</span>
+                  <span className="text-emerald-400 font-medium">● Verified Grounded</span>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-              {messages.map((msg) => {
-                if (msg.role === 'user') {
+          </div>
+        )}
+
+        {/* Tab 2: History View */}
+        {activeTab === 'history' && (
+          <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
+            <h2 className="text-xl font-bold text-white mb-2">Research Session History</h2>
+            <p className="text-sm text-slate-400 mb-6">
+              Saved threads backed by Supabase PostgreSQL chat persistence.
+            </p>
+
+            <div className="space-y-3">
+              {threads.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleSelectThread(t.id)}
+                  className="w-full flex items-center justify-between rounded-xl border border-slate-800 bg-[#111827]/80 p-4 text-left shadow-lg hover:border-cyan-500/40 hover:bg-slate-900 transition"
+                >
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{t.title}</h3>
+                    <p className="text-xs text-slate-500 mt-1">ID: {t.id}</p>
+                  </div>
+                  <span className="text-xs text-cyan-400 font-medium">Resume Chat →</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Insights (Main Chat & Research Canvas) */}
+        {activeTab === 'insights' && (
+          <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden p-6">
+            {messages.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-950/60 text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.2)]">
+                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  What would you like to research?
+                </h2>
+                <p className="mt-2 text-sm text-slate-400 max-w-lg">
+                  Audited financial synthesis powered by Hybrid Search (HNSW + Postgres FTS) and
+                  Llama 3.3 70B.
+                </p>
+
+                <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSendMessage('What were Apple total net sales and iPhone revenue in 2025?')
+                    }
+                    className="group rounded-2xl border border-slate-800 bg-[#111827]/70 p-4 text-left shadow-lg transition hover:border-cyan-500/40 hover:bg-slate-900/90"
+                  >
+                    <span className="rounded-md border border-cyan-500/40 bg-cyan-950/80 px-2 py-0.5 text-[10px] font-bold text-cyan-300">
+                      AAPL 10-K
+                    </span>
+                    <p className="mt-2 text-sm font-semibold text-white group-hover:text-cyan-300 transition">
+                      Apple 2025 Net Sales & Segments
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Breakdown of iPhone, Mac, and Services revenue.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSendMessage('How did Microsoft cloud and Azure revenue grow?')
+                    }
+                    className="group rounded-2xl border border-slate-800 bg-[#111827]/70 p-4 text-left shadow-lg transition hover:border-cyan-500/40 hover:bg-slate-900/90"
+                  >
+                    <span className="rounded-md border border-cyan-500/40 bg-cyan-950/80 px-2 py-0.5 text-[10px] font-bold text-cyan-300">
+                      MSFT 10-K
+                    </span>
+                    <p className="mt-2 text-sm font-semibold text-white group-hover:text-cyan-300 transition">
+                      Microsoft Cloud & Azure Growth
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Intelligent Cloud performance and annual growth drivers.
+                    </p>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 space-y-5 overflow-y-auto pr-2">
+                {messages.map((msg) => {
+                  if (msg.role === 'user') {
+                    return (
+                      <div key={msg.id} className="flex gap-3 justify-end">
+                        <div className="max-w-[80%] rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-sm leading-relaxed text-white shadow-[0_4px_16px_rgba(37,99,235,0.25)] font-medium">
+                          {msg.content}
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // Assistant message handling
+                  const { cleanText, citations: parsedCitations } = extractCitations(msg.content)
+                  const citations =
+                    msg.citations && msg.citations.length > 0 ? msg.citations : parsedCitations
+                  const displayText =
+                    cleanText || (isStreaming ? 'Synthesizing SEC 10-K filings with Llama 3.3 70B...' : '')
+
                   return (
-                    <div key={msg.id} className="flex gap-3 justify-end">
-                      <div className="max-w-[85%] rounded-2xl bg-blue-600 p-4 text-sm leading-relaxed text-white shadow-sm">
-                        {msg.content}
+                    <div key={msg.id} className="flex gap-3 justify-start">
+                      <div className="max-w-[90%] rounded-2xl border border-slate-800 bg-[#111827]/90 p-5 text-sm leading-relaxed text-slate-200 shadow-xl backdrop-blur-sm">
+                        <div className="whitespace-pre-wrap">{displayText}</div>
+
+                        {/* Interactive Glowing Citation Badges */}
+                        {citations && citations.length > 0 && (
+                          <div className="mt-5 border-t border-slate-800/80 pt-3.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
+                              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                              <span>Verified SEC Grounding Citations</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {citations.map((c, idx) => (
+                                <button
+                                  key={c.chunk_id + '-' + idx}
+                                  type="button"
+                                  onClick={() => setActiveCitation(c)}
+                                  className="group inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/40 px-3 py-1.5 text-xs text-cyan-300 transition hover:border-cyan-400 hover:bg-cyan-900/60 shadow-[0_0_12px_rgba(6,182,212,0.15)] text-left"
+                                  title={`Inspect audited 10-K passage for ${c.ticker}`}
+                                >
+                                  <span className="font-bold text-cyan-400">
+                                    [{idx + 1}] {c.ticker}
+                                  </span>
+                                  <span className="max-w-[200px] truncate text-[11px] text-slate-400 italic group-hover:text-cyan-200">
+                                    "{c.snippet}"
+                                  </span>
+                                  <span className="text-[10px] text-cyan-400 opacity-60 group-hover:opacity-100 transition-opacity">
+                                    ↗
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
-                }
+                })}
+              </div>
+            )}
 
-                // Assistant message handling
-                const { cleanText, citations: parsedCitations } = extractCitations(msg.content)
-                const citations =
-                  msg.citations && msg.citations.length > 0 ? msg.citations : parsedCitations
-                const displayText =
-                  cleanText || (isStreaming ? 'Researching SEC filings...' : '')
-
-                return (
-                  <div key={msg.id} className="flex gap-3 justify-start">
-                    <div className="max-w-[85%] rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-800 shadow-sm">
-                      <div className="whitespace-pre-wrap">{displayText}</div>
-
-                      {/* Interactive Citation Badges */}
-                      {citations && citations.length > 0 && (
-                        <div className="mt-4 border-t border-slate-100 pt-3">
-                          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                            <svg
-                              className="w-3.5 h-3.5 text-blue-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                              />
-                            </svg>
-                            <span>Verified Grounding Citations</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {citations.map((c, idx) => (
-                              <button
-                                key={c.chunk_id + '-' + idx}
-                                type="button"
-                                onClick={() => setActiveCitation(c)}
-                                className="group inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition hover:border-blue-400 hover:bg-blue-50/70 hover:text-blue-700 text-left"
-                                title={`Inspect 10-K passage for ${c.ticker}`}
-                              >
-                                <span className="font-bold text-blue-600">
-                                  [{idx + 1}] {c.ticker}
-                                </span>
-                                <span className="max-w-[200px] truncate text-[11px] text-slate-500 italic group-hover:text-blue-600">
-                                  "{c.snippet}"
-                                </span>
-                                <span className="text-[10px] text-blue-400 opacity-60 group-hover:opacity-100 transition-opacity">
-                                  ↗
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Input Bar */}
-          <div className="mt-4 border-t border-slate-200 pt-4">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                handleSendMessage()
-              }}
-              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
-            >
-              <input
-                type="text"
-                value={input}
-                disabled={isStreaming}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about Apple or Microsoft filings..."
-                className="flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-slate-400"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isStreaming}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-40"
+            {/* Input Bar */}
+            <div className="mt-4 pt-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSendMessage()
+                }}
+                className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-[#111827]/90 p-2.5 shadow-2xl backdrop-blur-md focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/40 transition"
               >
-                {isStreaming ? 'Searching...' : 'Send'}
-              </button>
-            </form>
-          </div>
-        </main>
+                <input
+                  type="text"
+                  value={input}
+                  disabled={isStreaming}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask about Apple or Microsoft 10-K filings..."
+                  className="flex-1 bg-transparent px-3 text-sm text-white outline-none placeholder:text-slate-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isStreaming}
+                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2.5 text-xs font-semibold text-white shadow-[0_0_15px_rgba(6,182,212,0.3)] transition hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40"
+                >
+                  {isStreaming ? 'Searching...' : 'Send'}
+                </button>
+              </form>
+            </div>
+          </main>
+        )}
       </div>
 
       {/* Slide-over Citation Drawer */}
