@@ -118,13 +118,30 @@ export default function App() {
     setIsStreaming(true)
 
     try {
+      let receivedAnyChunk = false
       await streamChatResponse(currentThreadId, textToSend, (chunk) => {
+        receivedAnyChunk = true
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantMsgId ? { ...msg, content: msg.content + chunk } : msg
           )
         )
       })
+
+      if (!receivedAnyChunk) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId && !msg.content
+              ? {
+                  ...msg,
+                  content:
+                    '⚠️ The server closed the stream without returning any tokens. Please check your Railway backend logs or verify that GROQ_API_KEY / LLM credentials are configured.',
+                }
+              : msg
+          )
+        )
+      }
+
       // Refresh sidebar threads list after turn finishes
       await loadThreads()
     } catch (err: any) {
@@ -493,11 +510,21 @@ export default function App() {
                   const citations =
                     msg.citations && msg.citations.length > 0 ? msg.citations : parsedCitations
                   const displayText =
-                    cleanText || (isStreaming ? 'Synthesizing SEC 10-K filings with Llama 3.3 70B...' : '')
+                    cleanText ||
+                    (isStreaming
+                      ? 'Synthesizing SEC 10-K filings with Llama 3.3 70B...'
+                      : '⚠️ No response received from server. Please check backend logs.')
+                  const isError = displayText.startsWith('⚠️')
 
                   return (
                     <div key={msg.id} className="flex gap-3 justify-start">
-                      <div className="max-w-[90%] rounded-2xl border border-slate-800 bg-[#111827]/90 p-5 text-sm leading-relaxed text-slate-200 shadow-xl backdrop-blur-sm">
+                      <div
+                        className={`max-w-[90%] rounded-2xl border ${
+                          isError
+                            ? 'border-amber-500/40 bg-amber-950/30 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                            : 'border-slate-800 bg-[#111827]/90 text-slate-200 shadow-xl'
+                        } p-5 text-sm leading-relaxed backdrop-blur-sm`}
+                      >
                         <div className="whitespace-pre-wrap">{displayText}</div>
 
                         {/* Interactive Glowing Citation Badges */}

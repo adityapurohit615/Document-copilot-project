@@ -8,17 +8,40 @@ from app.assistant.outputs import GroundedAnswer
 from app.database.config import settings
 from app.retrieval.retriever import search_filings
 
-# 1. Configure the Hugging Face OpenAI-compatible provider
-provider = OpenAIProvider(
-    base_url="https://router.huggingface.co/v1",
-    api_key=settings.huggingface_api_key,
-)
+# 1. Configure the LLM Provider (Groq Llama 3.3 70B, Gemini, OpenAI, or Hugging Face)
+def get_llm_model() -> OpenAIChatModel:
+    if settings.groq_api_key and settings.groq_api_key.startswith("gsk_"):
+        print("⚡ Using Groq Llama-3.3-70B-Versatile LLM provider", flush=True)
+        provider = OpenAIProvider(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=settings.groq_api_key,
+        )
+        return OpenAIChatModel("llama-3.3-70b-versatile", provider=provider)
 
-# 2. Llama-3.3-70B is fast, capable, and excels at citations
-llm_model = OpenAIChatModel(
-    "meta-llama/Llama-3.3-70B-Instruct",
-    provider=provider,
-)
+    if settings.gemini_api_key:
+        print("⚡ Using Google Gemini LLM provider", flush=True)
+        provider = OpenAIProvider(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=settings.gemini_api_key,
+        )
+        return OpenAIChatModel("gemini-2.5-flash", provider=provider)
+
+    if settings.openai_api_key and not settings.openai_api_key.startswith("sk-your-"):
+        print("⚡ Using OpenAI gpt-4o-mini LLM provider", flush=True)
+        provider = OpenAIProvider(api_key=settings.openai_api_key)
+        return OpenAIChatModel("gpt-4o-mini", provider=provider)
+
+    print("⚡ Using Hugging Face Router LLM provider", flush=True)
+    provider = OpenAIProvider(
+        base_url="https://router.huggingface.co/v1",
+        api_key=settings.huggingface_api_key,
+    )
+    return OpenAIChatModel(
+        "meta-llama/Llama-3.3-70B-Instruct",
+        provider=provider,
+    )
+
+llm_model = get_llm_model()
 
 # 3. Load System Instructions from instructions.md
 INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"

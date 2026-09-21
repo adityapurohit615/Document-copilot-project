@@ -51,96 +51,100 @@ async def chat_stream_generator(
     user_email: str = "",
 ) -> AsyncGenerator[str, None]:
     """Runs the PydanticAI agent, validates citations, streams tokens, and saves to DB."""
-    deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id)
-
-    # 1. Run the agent
-    result = await document_agent.run(user_query, deps=deps)
-    grounded_answer = result.output
-
-    # 2. Validate citations
-    # Fetch passages to verify citations against
-    passages = search_filings(user_query, limit=4)
-    validation = GroundingValidator.validate(grounded_answer, passages)
-
-    if not validation.is_valid:
-        yield f"[Grounding Warning]: {validation.error_message}\n\n"
-
-    # 3. Stream the answer text word-by-word
-    words = grounded_answer.answer.split(" ")
-    for word in words:
-        yield f"{word} "
-        await asyncio.sleep(0.02)
-
-    # 4. Stream structured citation metadata for frontend interactive badges
-    if grounded_answer.citations:
-        citations_payload = [
-            {
-                "chunk_id": str(c.chunk_id),
-                "ticker": c.ticker,
-                "snippet": c.snippet,
-            }
-            for c in grounded_answer.citations
-        ]
-        yield f"\n\n<!--CITATIONS:{json.dumps(citations_payload)}-->\n"
-
-    # 5. Persist to Supabase in a background transaction
     try:
-        with Session(engine) as session:
-            # Ensure profile exists in public.profiles to satisfy Foreign Key
-            profile = session.get(Profile, user_id)
-            if not profile:
-                profile = Profile(
-                    id=user_id,
-                    email=user_email or "analyst@firm.com",
-                )
-                session.add(profile)
-                session.flush()
+        deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id)
 
-            # Ensure thread exists or create it
-            thread = session.get(ChatThread, thread_id)
-            if not thread:
-                thread = ChatThread(
-                    id=thread_id,
-                    user_id=user_id,
-                    title=user_query[:50] + ("..." if len(user_query) > 50 else ""),
-                )
-                session.add(thread)
-                session.flush()
+        # 1. Run the agent
+        result = await document_agent.run(user_query, deps=deps)
+        grounded_answer = result.output
 
-            # Save user message
-            user_msg = ChatMessage(
-                id=uuid.uuid4(),
-                thread_id=thread_id,
-                role="user",
-                content=user_query,
-            )
-            session.add(user_msg)
+        # 2. Validate citations
+        # Fetch passages to verify citations against
+        passages = search_filings(user_query, limit=4)
+        validation = GroundingValidator.validate(grounded_answer, passages)
 
-            # Save assistant message
-            assistant_msg_id = uuid.uuid4()
-            asst_msg = ChatMessage(
-                id=assistant_msg_id,
-                thread_id=thread_id,
-                role="assistant",
-                content=grounded_answer.answer,
-            )
-            session.add(asst_msg)
+        if not validation.is_valid:
+            yield f"[Grounding Warning]: {validation.error_message}\n\n"
 
-            # Save citations
-            for c in grounded_answer.citations:
-                citation_record = MessageCitation(
+        # 3. Stream the answer text word-by-word
+        words = grounded_answer.answer.split(" ")
+        for word in words:
+            yield f"{word} "
+            await asyncio.sleep(0.02)
+
+        # 4. Stream structured citation metadata for frontend interactive badges
+        if grounded_answer.citations:
+            citations_payload = [
+                {
+                    "chunk_id": str(c.chunk_id),
+                    "ticker": c.ticker,
+                    "snippet": c.snippet,
+                }
+                for c in grounded_answer.citations
+            ]
+            yield f"\n\n<!--CITATIONS:{json.dumps(citations_payload)}-->\n"
+
+        # 5. Persist to Supabase in a background transaction
+        try:
+            with Session(engine) as session:
+                # Ensure profile exists in public.profiles to satisfy Foreign Key
+                profile = session.get(Profile, user_id)
+                if not profile:
+                    profile = Profile(
+                        id=user_id,
+                        email=user_email or "analyst@firm.com",
+                    )
+                    session.add(profile)
+                    session.flush()
+
+                # Ensure thread exists or create it
+                thread = session.get(ChatThread, thread_id)
+                if not thread:
+                    thread = ChatThread(
+                        id=thread_id,
+                        user_id=user_id,
+                        title=user_query[:50] + ("..." if len(user_query) > 50 else ""),
+                    )
+                    session.add(thread)
+                    session.flush()
+
+                # Save user message
+                user_msg = ChatMessage(
                     id=uuid.uuid4(),
-                    message_id=assistant_msg_id,
-                    chunk_id=uuid.UUID(c.chunk_id),
-                    snippet=c.snippet,
+                    thread_id=thread_id,
+                    role="user",
+                    content=user_query,
                 )
-                session.add(citation_record)
+                session.add(user_msg)
 
-            session.commit()
-            print(f"✅ Successfully persisted thread {thread_id} and messages to Supabase")
+                # Save assistant message
+                assistant_msg_id = uuid.uuid4()
+                asst_msg = ChatMessage(
+                    id=assistant_msg_id,
+                    thread_id=thread_id,
+                    role="assistant",
+                    content=grounded_answer.answer,
+                )
+                session.add(asst_msg)
+
+                # Save citations
+                for c in grounded_answer.citations:
+                    citation_record = MessageCitation(
+                        id=uuid.uuid4(),
+                        message_id=assistant_msg_id,
+                        chunk_id=uuid.UUID(c.chunk_id),
+                        snippet=c.snippet,
+                    )
+                    session.add(citation_record)
+
+                session.commit()
+                print(f"✅ Successfully persisted thread {thread_id} and messages to Supabase")
+        except Exception as e:
+            # Logging without breaking client stream
+            print(f"[Database Error]: Failed to persist chat: {e}")
     except Exception as e:
-        # Logging without breaking client stream
-        print(f"[Database Error]: Failed to persist chat: {e}")
+        print(f"[Chat Stream Generator Error]: {e}", flush=True)
+        yield f"⚠️ Agent Error: {str(e)}"
 
 
 @router.post("/stream")

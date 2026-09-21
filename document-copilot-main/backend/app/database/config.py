@@ -15,7 +15,11 @@ class Settings(BaseSettings):
     # --- Postgres (Direct session connection for Alembic & SQLAlchemy) ---
     database_url: str
 
-    # --- OpenAI (LLM + Embeddings) ---
+    # --- LLM Providers ---
+    groq_api_key: str | None = None
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+
     # --- Hugging Face (Embeddings) ---
     huggingface_api_key: str 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
