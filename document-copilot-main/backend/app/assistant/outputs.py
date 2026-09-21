@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 class Citation(BaseModel):
     """A citation referencing a specific passage in a retrieved filing."""
     chunk_id: str = Field(..., description="UUID of the cited document chunk")
-    ticker: str = Field(..., description="Company ticker, e.g., 'AAPL'")
+    ticker: str = Field(default="SEC", description="Company ticker, e.g., 'AAPL'")
     snippet: str = Field(..., description="Exact excerpt or figure supporting the statement")
 
 

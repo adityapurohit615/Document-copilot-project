@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.assistant.agent import document_agent
 from app.assistant.deps import DocumentAgentDeps
+from app.assistant.outputs import Citation, GroundedAnswer
 from app.auth.dependencies import AuthenticatedUser, get_current_user
 from app.database.config import settings
 from app.database.models import (
@@ -44,6 +45,38 @@ class ChatStreamRequest(BaseModel):
     messages: list[ChatMessageInput] = Field(..., description="Conversation history")
 
 
+def extract_grounded_answer_from_exception(err: Exception) -> GroundedAnswer | None:
+    """Extracts GroundedAnswer if model generation completed but API provider failed tool validation."""
+    body = getattr(err, "body", None)
+    if isinstance(body, dict) and "failed_generation" in body:
+        raw_gen = body["failed_generation"]
+        if isinstance(raw_gen, str):
+            try:
+                parsed = json.loads(raw_gen, strict=False)
+                args = parsed.get("arguments", parsed)
+                if isinstance(args, str):
+                    args = json.loads(args, strict=False)
+                if isinstance(args, dict) and "answer" in args:
+                    citations_list = []
+                    for c in args.get("citations", []):
+                        if isinstance(c, dict) and "chunk_id" in c:
+                            citations_list.append(
+                                Citation(
+                                    chunk_id=str(c.get("chunk_id", "")),
+                                    ticker=c.get("ticker", "SEC"),
+                                    snippet=c.get("snippet", ""),
+                                )
+                            )
+                    return GroundedAnswer(
+                        answer=args["answer"],
+                        citations=citations_list,
+                        evidence_sufficient=args.get("evidence_sufficient", True),
+                    )
+            except Exception as parse_e:
+                print(f"[failed_generation recovery error]: {parse_e}", flush=True)
+    return None
+
+
 async def chat_stream_generator(
     user_query: str,
     thread_id: uuid.UUID,
@@ -54,30 +87,51 @@ async def chat_stream_generator(
     try:
         deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id)
 
-        # 1. Run the agent (with fallback if configured model is not available)
+        # 1. Run the agent (with fallback and failed_generation recovery)
+        grounded_answer: GroundedAnswer | None = None
         try:
             result = await document_agent.run(user_query, deps=deps)
+            grounded_answer = result.output
         except Exception as run_err:
-            err_str = str(run_err).lower()
-            if "model_not_found" in err_str or "does not exist" in err_str or "access to it" in err_str:
-                from app.assistant.agent import get_groq_provider
-                from pydantic_ai.models.openai import OpenAIChatModel
-                groq_provider = get_groq_provider()
-                if groq_provider:
-                    print(f"⚠️ Primary model error ({run_err}), falling back to openai/gpt-oss-120b...", flush=True)
-                    try:
-                        m1 = OpenAIChatModel("openai/gpt-oss-120b", provider=groq_provider)
-                        result = await document_agent.run(user_query, deps=deps, model=m1)
-                    except Exception as fb_err:
-                        print(f"⚠️ Fallback to 120b failed ({fb_err}), falling back to openai/gpt-oss-20b...", flush=True)
-                        m2 = OpenAIChatModel("openai/gpt-oss-20b", provider=groq_provider)
-                        result = await document_agent.run(user_query, deps=deps, model=m2)
+            recovered = extract_grounded_answer_from_exception(run_err)
+            if recovered:
+                print("✅ Successfully recovered GroundedAnswer from Groq failed_generation!", flush=True)
+                grounded_answer = recovered
+            else:
+                err_str = str(run_err).lower()
+                if "model_not_found" in err_str or "does not exist" in err_str or "access to it" in err_str:
+                    from app.assistant.agent import get_groq_provider
+                    from pydantic_ai.models.openai import OpenAIChatModel
+                    groq_provider = get_groq_provider()
+                    if groq_provider:
+                        print(f"⚠️ Primary model error ({run_err}), falling back to openai/gpt-oss-120b...", flush=True)
+                        try:
+                            m1 = OpenAIChatModel("openai/gpt-oss-120b", provider=groq_provider)
+                            result = await document_agent.run(user_query, deps=deps, model=m1)
+                            grounded_answer = result.output
+                        except Exception as fb_err:
+                            rec_fb = extract_grounded_answer_from_exception(fb_err)
+                            if rec_fb:
+                                grounded_answer = rec_fb
+                            else:
+                                print(f"⚠️ Fallback to 120b failed ({fb_err}), falling back to openai/gpt-oss-20b...", flush=True)
+                                m2 = OpenAIChatModel("openai/gpt-oss-20b", provider=groq_provider)
+                                try:
+                                    result = await document_agent.run(user_query, deps=deps, model=m2)
+                                    grounded_answer = result.output
+                                except Exception as fb2_err:
+                                    rec_fb2 = extract_grounded_answer_from_exception(fb2_err)
+                                    if rec_fb2:
+                                        grounded_answer = rec_fb2
+                                    else:
+                                        raise fb2_err
+                    else:
+                        raise run_err
                 else:
                     raise run_err
-            else:
-                raise run_err
 
-        grounded_answer = result.output
+        if not grounded_answer:
+            raise RuntimeError("Failed to obtain grounded answer from agent.")
 
         # 2. Validate citations
         # Fetch passages to verify citations against

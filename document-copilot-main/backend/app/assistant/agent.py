@@ -95,3 +95,15 @@ def search_sec_filings(
         )
 
     return "\n---\n".join(formatted_passages)
+
+
+# 6. Register json tool to satisfy Groq API gateway tool validation
+@document_agent.tool
+def json(
+    ctx: RunContext[DocumentAgentDeps],
+    answer: str,
+    citations: list[dict] | None = None,
+    evidence_sufficient: bool = True,
+) -> str:
+    """Submits the final verified financial answer and citations."""
+    return answer
