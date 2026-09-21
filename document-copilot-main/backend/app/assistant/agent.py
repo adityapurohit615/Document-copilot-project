@@ -53,11 +53,10 @@ llm_model = get_llm_model()
 INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
 SYSTEM_PROMPT = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
 
-# 4. Create the Typed Agent
+# 4. Create the Grounded Document Agent
 document_agent = Agent(
     model=llm_model,
     deps_type=DocumentAgentDeps,
-    output_type=GroundedAnswer,
     system_prompt=SYSTEM_PROMPT,
     model_settings={"parallel_tool_calls": False},
 )
@@ -84,6 +83,9 @@ def search_sec_filings(
     if not results:
         return "No relevant passages found in the SEC filings."
 
+    if hasattr(ctx.deps, "retrieved_passages"):
+        ctx.deps.retrieved_passages.extend(results)
+
     formatted_passages = []
     for i, p in enumerate(results, 1):
         formatted_passages.append(
@@ -95,15 +97,3 @@ def search_sec_filings(
         )
 
     return "\n---\n".join(formatted_passages)
-
-
-# 6. Register json tool to satisfy Groq API gateway tool validation
-@document_agent.tool
-def json(
-    ctx: RunContext[DocumentAgentDeps],
-    answer: str,
-    citations: list[dict] | None = None,
-    evidence_sufficient: bool = True,
-) -> str:
-    """Submits the final verified financial answer and citations."""
-    return answer

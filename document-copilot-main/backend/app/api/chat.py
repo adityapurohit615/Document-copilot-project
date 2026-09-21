@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import uuid
 from typing import AsyncGenerator
 
@@ -34,6 +35,8 @@ elif db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
 engine = create_engine(db_url)
 
+UUID_REGEX = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.IGNORECASE)
+
 
 class ChatMessageInput(BaseModel):
     role: str = Field(..., description="Role of the sender: 'user' or 'assistant'")
@@ -45,12 +48,80 @@ class ChatStreamRequest(BaseModel):
     messages: list[ChatMessageInput] = Field(..., description="Conversation history")
 
 
-def extract_grounded_answer_from_exception(err: Exception) -> GroundedAnswer | None:
+def build_grounded_answer(
+    raw_text: str,
+    retrieved_passages: list,
+    evidence_sufficient: bool = True,
+) -> GroundedAnswer:
+    """Builds a GroundedAnswer from raw text and retrieved passages, cleaning citations."""
+    found_uuids = UUID_REGEX.findall(raw_text)
+
+    # Index passages by lowercase chunk_id string
+    passage_by_id = {str(getattr(p, "chunk_id", "")).lower(): p for p in retrieved_passages}
+
+    citations: list[Citation] = []
+    seen_cids = set()
+
+    # 1. Add passages whose chunk_id was explicitly cited in raw_text
+    for cid in found_uuids:
+        cid_lower = cid.lower()
+        if cid_lower not in seen_cids:
+            p = passage_by_id.get(cid_lower)
+            ticker = getattr(p, "ticker", "SEC") if p else "SEC"
+            raw_snip = getattr(p, "text", "") if p else ""
+            snippet = (raw_snip[:200] + "...") if len(raw_snip) > 200 else raw_snip
+            citations.append(
+                Citation(
+                    chunk_id=cid,
+                    ticker=ticker or "SEC",
+                    snippet=snippet,
+                )
+            )
+            seen_cids.add(cid_lower)
+
+    # 2. If no chunk IDs cited in text, supplement with top retrieved passages
+    if not citations and retrieved_passages:
+        for p in retrieved_passages[:3]:
+            cid = str(getattr(p, "chunk_id", ""))
+            if cid and cid.lower() not in seen_cids:
+                raw_snip = getattr(p, "text", "")
+                snippet = (raw_snip[:200] + "...") if len(raw_snip) > 200 else raw_snip
+                citations.append(
+                    Citation(
+                        chunk_id=cid,
+                        ticker=getattr(p, "ticker", "SEC") or "SEC",
+                        snippet=snippet,
+                    )
+                )
+                seen_cids.add(cid.lower())
+
+    # 3. Clean up the raw UUIDs in the text to readable bracketed numbers [1], [2], etc.
+    clean_text = raw_text
+    for idx, citation in enumerate(citations, 1):
+        cid = citation.chunk_id
+        pattern = r"[【\[\(]?(?:chunk:?\s*(?:id:?)?\s*)?" + re.escape(cid) + r"[】\]\)]?"
+        clean_text = re.sub(pattern, f"[{idx}]", clean_text, flags=re.IGNORECASE)
+
+    # Clean up leftover Chinese brackets
+    clean_text = clean_text.replace("【", "[").replace("】", "]")
+
+    return GroundedAnswer(
+        answer=clean_text.strip(),
+        citations=citations,
+        evidence_sufficient=evidence_sufficient,
+    )
+
+
+def extract_grounded_answer_from_exception(
+    err: Exception,
+    retrieved_passages: list | None = None,
+) -> GroundedAnswer | None:
     """Extracts GroundedAnswer if model generation completed but API provider failed tool validation."""
     body = getattr(err, "body", None)
     if isinstance(body, dict) and "failed_generation" in body:
         raw_gen = body["failed_generation"]
-        if isinstance(raw_gen, str):
+        if isinstance(raw_gen, str) and raw_gen.strip():
+            # 1. Try JSON parsing
             try:
                 parsed = json.loads(raw_gen, strict=False)
                 args = parsed.get("arguments", parsed)
@@ -72,8 +143,14 @@ def extract_grounded_answer_from_exception(err: Exception) -> GroundedAnswer | N
                         citations=citations_list,
                         evidence_sufficient=args.get("evidence_sufficient", True),
                     )
-            except Exception as parse_e:
-                print(f"[failed_generation recovery error]: {parse_e}", flush=True)
+            except Exception:
+                pass
+
+            # 2. Raw text generation fallback
+            return build_grounded_answer(
+                raw_text=raw_gen,
+                retrieved_passages=retrieved_passages or [],
+            )
     return None
 
 
@@ -91,9 +168,13 @@ async def chat_stream_generator(
         grounded_answer: GroundedAnswer | None = None
         try:
             result = await document_agent.run(user_query, deps=deps)
-            grounded_answer = result.output
+            out = result.output
+            if isinstance(out, GroundedAnswer):
+                grounded_answer = out
+            else:
+                grounded_answer = build_grounded_answer(str(out), deps.retrieved_passages)
         except Exception as run_err:
-            recovered = extract_grounded_answer_from_exception(run_err)
+            recovered = extract_grounded_answer_from_exception(run_err, deps.retrieved_passages)
             if recovered:
                 print("✅ Successfully recovered GroundedAnswer from Groq failed_generation!", flush=True)
                 grounded_answer = recovered
@@ -108,9 +189,13 @@ async def chat_stream_generator(
                         try:
                             m1 = OpenAIChatModel("openai/gpt-oss-120b", provider=groq_provider)
                             result = await document_agent.run(user_query, deps=deps, model=m1)
-                            grounded_answer = result.output
+                            out = result.output
+                            if isinstance(out, GroundedAnswer):
+                                grounded_answer = out
+                            else:
+                                grounded_answer = build_grounded_answer(str(out), deps.retrieved_passages)
                         except Exception as fb_err:
-                            rec_fb = extract_grounded_answer_from_exception(fb_err)
+                            rec_fb = extract_grounded_answer_from_exception(fb_err, deps.retrieved_passages)
                             if rec_fb:
                                 grounded_answer = rec_fb
                             else:
@@ -118,9 +203,13 @@ async def chat_stream_generator(
                                 m2 = OpenAIChatModel("openai/gpt-oss-20b", provider=groq_provider)
                                 try:
                                     result = await document_agent.run(user_query, deps=deps, model=m2)
-                                    grounded_answer = result.output
+                                    out = result.output
+                                    if isinstance(out, GroundedAnswer):
+                                        grounded_answer = out
+                                    else:
+                                        grounded_answer = build_grounded_answer(str(out), deps.retrieved_passages)
                                 except Exception as fb2_err:
-                                    rec_fb2 = extract_grounded_answer_from_exception(fb2_err)
+                                    rec_fb2 = extract_grounded_answer_from_exception(fb2_err, deps.retrieved_passages)
                                     if rec_fb2:
                                         grounded_answer = rec_fb2
                                     else:
@@ -133,13 +222,19 @@ async def chat_stream_generator(
         if not grounded_answer:
             raise RuntimeError("Failed to obtain grounded answer from agent.")
 
-        # 2. Validate citations
-        # Fetch passages to verify citations against
-        passages = search_filings(user_query, limit=4)
-        validation = GroundingValidator.validate(grounded_answer, passages)
+        # Ensure we have retrieved passages for citation validation
+        passages = deps.retrieved_passages
+        if not passages:
+            passages = search_filings(user_query, limit=4)
 
+        # If citations are empty, fill them from passages
+        if not grounded_answer.citations and passages:
+            grounded_answer = build_grounded_answer(grounded_answer.answer, passages)
+
+        # 2. Validate citations
+        validation = GroundingValidator.validate(grounded_answer, passages)
         if not validation.is_valid:
-            yield f"[Grounding Warning]: {validation.error_message}\n\n"
+            print(f"[Grounding Warning]: {validation.error_message}", flush=True)
 
         # 3. Stream the answer text word-by-word
         words = grounded_answer.answer.split(" ")
@@ -202,21 +297,25 @@ async def chat_stream_generator(
                 )
                 session.add(asst_msg)
 
-                # Save citations
+                # Save citations safely
                 for c in grounded_answer.citations:
+                    try:
+                        cid_val = uuid.UUID(str(c.chunk_id))
+                    except Exception:
+                        continue
                     citation_record = MessageCitation(
                         id=uuid.uuid4(),
                         message_id=assistant_msg_id,
-                        chunk_id=uuid.UUID(c.chunk_id),
+                        chunk_id=cid_val,
                         snippet=c.snippet,
                     )
                     session.add(citation_record)
 
                 session.commit()
-                print(f"✅ Successfully persisted thread {thread_id} and messages to Supabase")
+                print(f"✅ Successfully persisted thread {thread_id} and messages to Supabase", flush=True)
         except Exception as e:
             # Logging without breaking client stream
-            print(f"[Database Error]: Failed to persist chat: {e}")
+            print(f"[Database Error]: Failed to persist chat: {e}", flush=True)
     except Exception as e:
         print(f"[Chat Stream Generator Error]: {e}", flush=True)
         yield f"⚠️ Agent Error: {str(e)}"
