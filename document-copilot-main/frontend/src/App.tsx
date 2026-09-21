@@ -90,6 +90,27 @@ export default function App() {
     setAuthLoading(false)
   }
 
+  const handleGuestDemo = async () => {
+    setAuthLoading(true)
+    setAuthError(null)
+    // 1. Try dedicated guest analyst account
+    let { error } = await supabase.auth.signInWithPassword({
+      email: 'guest.analyst@driftwood.com',
+      password: 'GuestDemo2026!',
+    })
+    // 2. Fallback to analyst account if needed
+    if (error) {
+      const fallback = await supabase.auth.signInWithPassword({
+        email: 'adityapurohit615@gmail.com',
+        password: '12345',
+      })
+      if (fallback.error) {
+        setAuthError(error.message)
+      }
+    }
+    setAuthLoading(false)
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setMessages([])
@@ -190,6 +211,24 @@ export default function App() {
             </p>
           </div>
 
+          {/* 1-Click Instant Guest Demo Access */}
+          <button
+            type="button"
+            onClick={handleGuestDemo}
+            disabled={authLoading}
+            className="group mb-5 flex w-full items-center justify-center gap-2.5 rounded-xl border border-cyan-500/50 bg-gradient-to-r from-cyan-950/80 via-blue-950/60 to-indigo-950/80 px-4 py-3.5 text-sm font-bold text-cyan-300 shadow-[0_0_25px_rgba(6,182,212,0.2)] transition hover:border-cyan-400 hover:from-cyan-900/80 hover:to-blue-900/80 hover:shadow-[0_0_35px_rgba(6,182,212,0.35)] disabled:opacity-50"
+          >
+            <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span>{authLoading ? 'Entering Research Dashboard...' : '✨ Try Instant Demo (1-Click Access)'}</span>
+          </button>
+
+          <div className="relative mb-5 flex items-center justify-center">
+            <div className="w-full border-t border-slate-800"></div>
+            <span className="bg-[#111827] px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              or sign in with email
+            </span>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300">Email Address</label>
@@ -229,6 +268,20 @@ export default function App() {
               {authLoading ? 'Signing in...' : 'Sign In as Analyst'}
             </button>
           </form>
+
+          <div className="mt-5 flex items-center justify-between border-t border-slate-800/80 pt-4 text-xs text-slate-400">
+            <span>Want to test credentials directly?</span>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('guest.analyst@driftwood.com')
+                setPassword('GuestDemo2026!')
+              }}
+              className="font-semibold text-cyan-400 hover:text-cyan-300 transition underline underline-offset-2"
+            >
+              Auto-fill creds
+            </button>
+          </div>
         </div>
       </div>
     )
